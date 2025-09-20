@@ -65,15 +65,12 @@ use Illuminate\Support\Facades\Storage;
                                             <small class="text-muted">
                                                 <strong>M3U8 Path:</strong> {{ $convertMp4->path_m3u8 }}<br>
                                                 <strong>M3U8 URL:</strong> {{ Storage::url($convertMp4->path_m3u8) }}<br>
-                                                <strong>File Exists:</strong> {{ Storage::disk('public')->exists($convertMp4->path_m3u8) ? 'Yes' : 'No' }}<br>
-                                                <strong>MP4 URL:</strong> {{ Storage::url($convertMp4->path_mp4) }}
+                                                <strong>File Exists:</strong> {{ Storage::disk('public')->exists($convertMp4->path_m3u8) ? 'Yes' : 'No' }}
                                             </small>
                                         </div>
                                         
                                         @if(Storage::disk('public')->exists($convertMp4->path_m3u8))
-                                            <video controls width="100%" height="300" class="border rounded">
-                                                <source src="{{ Storage::url($convertMp4->path_m3u8) }}" type="application/x-mpegURL">
-                                                <source src="{{ Storage::url($convertMp4->path_mp4) }}" type="video/mp4">
+                                            <video id="videoPlayer" controls width="100%" height="300" class="border rounded">
                                                 Your browser does not support the video tag or HLS streaming.
                                             </video>
                                         @else
@@ -85,7 +82,7 @@ use Illuminate\Support\Facades\Storage;
                                         
                                         <div class="mt-2">
                                             <small class="text-muted">
-                                                <strong>Note:</strong> If the video doesn't play, try downloading the M3U8 file and use a compatible player like VLC.
+                                                <strong>Note:</strong> This video is streaming in HLS (M3U8) format. If it doesn't play, your browser may not support HLS streaming.
                                             </small>
                                         </div>
                                     </div>
@@ -121,14 +118,67 @@ use Illuminate\Support\Facades\Storage;
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     
-    @if($convertMp4->status?->value === 'processing')
     <script>
+        @if(Storage::disk('public')->exists($convertMp4->path_m3u8))
+        // Initialize HLS.js for M3U8 playback
+        document.addEventListener('DOMContentLoaded', function() {
+            const video = document.getElementById('videoPlayer');
+            const m3u8Url = '{{ Storage::url($convertMp4->path_m3u8) }}';
+            
+            if (Hls.isSupported()) {
+                // HLS.js is supported
+                const hls = new Hls();
+                hls.loadSource(m3u8Url);
+                hls.attachMedia(video);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    console.log('M3U8 manifest loaded successfully');
+                });
+                
+                hls.on(Hls.Events.ERROR, function(event, data) {
+                    console.error('HLS Error:', data);
+                    if (data.fatal) {
+                        switch(data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.log('Fatal network error encountered, try to recover');
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.log('Fatal media error encountered, try to recover');
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                console.log('Fatal error, cannot recover');
+                                hls.destroy();
+                                break;
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Native HLS support (Safari)
+                video.src = m3u8Url;
+                video.addEventListener('loadedmetadata', function() {
+                    console.log('M3U8 loaded with native support');
+                });
+            } else {
+                // Fallback: show error message
+                video.style.display = 'none';
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger';
+                errorDiv.innerHTML = '<strong>Error:</strong> Your browser does not support HLS streaming. Please use a modern browser or download the M3U8 file.';
+                video.parentNode.insertBefore(errorDiv, video);
+            }
+        });
+        @endif
+        
+        @if($convertMp4->status?->value === 'processing')
         // Auto-refresh every 5 seconds while processing
         setTimeout(function() {
             location.reload();
         }, 5000);
+        @endif
     </script>
-    @endif
 </body>
 </html>

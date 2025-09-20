@@ -18,9 +18,13 @@ DB_DATABASE=laravel_db
 DB_USERNAME=laravel_user
 DB_PASSWORD=laravel_password
 
+# Note: External MySQL port is 3308 to avoid conflicts
+
 REDIS_HOST=redis
 REDIS_PASSWORD=null
 REDIS_PORT=6379
+
+# Note: External Redis port is 6380 to avoid conflicts
 
 CACHE_DRIVER=redis
 QUEUE_CONNECTION=redis
